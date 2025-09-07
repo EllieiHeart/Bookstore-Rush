@@ -187,7 +187,7 @@ GameObject:
   - component: {fileID: 1358841951538315334}
   - component: {fileID: 6530707696855571431}
   - component: {fileID: 6698521521329771325}
-  - component: {fileID: 53203207046714523}
+  - component: {fileID: 5858619501361511524}
   m_Layer: 0
   m_Name: Customer
   m_TagString: Customer
@@ -294,8 +294,8 @@ MonoBehaviour:
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   disappointedColor: {r: 1, g: 0, b: 0, a: 1}
   waitingColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
---- !u!58 &53203207046714523
-CircleCollider2D:
+--- !u!61 &5858619501361511524
+BoxCollider2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -324,9 +324,19 @@ CircleCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
-  m_Radius: 0.125
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 0.5, y: 0.78125}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 0.5, y: 0.78125}
+  m_EdgeRadius: 0

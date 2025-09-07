@@ -2,6 +2,16 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+
+public enum GameState
+{
+    Preparation,
+    Playing,
+    DayComplete,
+    DayFailed,
+    Paused
+}
 
 public class GameManager : MonoBehaviour
 {
@@ -11,13 +21,22 @@ public class GameManager : MonoBehaviour
     public CustomerSpawner spawner;
     public TextMeshProUGUI scoreText;
     public BookLibrary bookLibrary;
+    public GameTimer gameTimer;
+    public DayManager dayManager;
+
+    [Header("UI Panels")]
+    public GameObject dayCompletePanel;
+    public GameObject dayFailedPanel;
+    public GameObject preparationPanel;
+    public TextMeshProUGUI dayInfoText;
+    public TextMeshProUGUI objectiveText;
+
+    [Header("DEBUG - Check These Are Assigned")]
+    public bool debugMode = true;
 
     [Header("Customer Exit Positions")]
-    [Tooltip("Where satisfied customers exit to (usually right side)")]
     public Transform satisfiedExitPoint;
-    [Tooltip("Where disappointed customers exit to (usually left side)")]
     public Transform disappointedExitPoint;
-    [Tooltip("Default exit positions if transforms not assigned")]
     public Vector3 defaultSatisfiedExit = new Vector3(15f, -2f, 0f);
     public Vector3 defaultDisappointedExit = new Vector3(-15f, -2f, 0f);
 
@@ -38,33 +57,182 @@ public class GameManager : MonoBehaviour
     public int score;
     public int totalCustomersServed;
     public int wrongDeliveries;
+    public GameState currentState = GameState.Preparation;
 
-    [Header("Debug")]
-    [SerializeField] private bool showQueueDebug = true;
+    private DaySettings currentDaySettings;
+    private Coroutine customerSpawningCoroutine;
 
     void Awake()
     {
         if (I == null) I = this; else Destroy(gameObject);
+        
+        if (debugMode)
+            Debug.Log("GameManager: Awake() called");
     }
 
     void Start()
     {
+        if (debugMode)
+        {
+            Debug.Log("GameManager: Start() called");
+            DebugCheckReferences();
+        }
+        
         StartCoroutine(InitializeAfterLibrary());
         SetupDefaultExitPoints();
+        
+        // Try to start the system manually if DayManager doesn't work
+        StartCoroutine(FallbackStartSystem());
     }
+
+    void DebugCheckReferences()
+    {
+        Debug.Log("=== REFERENCE CHECK ===");
+        Debug.Log($"GameTimer: {(gameTimer != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log($"DayManager: {(dayManager != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log($"Preparation Panel: {(preparationPanel != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log($"Day Complete Panel: {(dayCompletePanel != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log($"Day Failed Panel: {(dayFailedPanel != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log($"Score Text: {(scoreText != null ? "ASSIGNED" : "NULL - MISSING!")}");
+        Debug.Log("========================");
+    }
+
+    IEnumerator FallbackStartSystem()
+    {
+        yield return new WaitForSeconds(1f); // Wait for other components to initialize
+        
+        if (currentState == GameState.Preparation)
+        {
+            Debug.Log("FALLBACK: Starting day system manually since DayManager didn't trigger");
+            
+            // Create default day settings
+            currentDaySettings = new DaySettings
+            {
+                dayNumber = 1,
+                dayName = "Day 1",
+                requiredCustomers = 5,
+                dayDuration = 120f,
+                customerSpawnInterval = 4f,
+                maxQueueSize = 5,
+                pointsPerCustomer = 100,
+                wrongOrderPenalty = 25
+            };
+            
+            StartPreparationPhase();
+        }
+    }
+
+    void StartPreparationPhase()
+    {
+        if (debugMode)
+            Debug.Log("GameManager: StartPreparationPhase() called");
+        
+        currentState = GameState.Preparation;
+        
+        if (preparationPanel != null)
+        {
+            preparationPanel.SetActive(true);
+            Debug.Log("Preparation panel activated");
+        }
+        else
+        {
+            Debug.LogError("Preparation panel is NULL!");
+        }
+        
+        if (gameTimer != null)
+        {
+            gameTimer.SetDayDuration(currentDaySettings?.dayDuration ?? 120f);
+            Debug.Log($"GameTimer duration set to: {currentDaySettings?.dayDuration ?? 120f}");
+        }
+        else
+        {
+            Debug.LogError("GameTimer is NULL!");
+        }
+        
+        // Start countdown
+        StartCoroutine(WaitForGameStart());
+    }
+
+    IEnumerator WaitForGameStart()
+    {
+        if (debugMode)
+            Debug.Log("GameManager: Starting 3 second countdown...");
+        
+        for (int i = 3; i > 0; i--)
+        {
+            Debug.Log($"Game starts in: {i}");
+            yield return new WaitForSeconds(1f);
+        }
+        
+        Debug.Log("Starting day now!");
+        StartDay();
+    }
+
+    public void StartDay()
+    {
+        if (debugMode)
+            Debug.Log($"GameManager: StartDay() called. Current state: {currentState}");
+        
+        if (currentState != GameState.Preparation) 
+        {
+            Debug.LogWarning($"Cannot start day from state: {currentState}");
+            return;
+        }
+        
+        currentState = GameState.Playing;
+        Debug.Log("Game state changed to: Playing");
+        
+        // Hide preparation UI
+        if (preparationPanel != null)
+        {
+            preparationPanel.SetActive(false);
+            Debug.Log("Preparation panel deactivated");
+        }
+        
+        // Reset stats
+        score = 0;
+        totalCustomersServed = 0;
+        wrongDeliveries = 0;
+        
+        // Start timer
+        if (gameTimer != null)
+        {
+            gameTimer.StartTimer();
+            Debug.Log("GameTimer started");
+        }
+        else
+        {
+            Debug.LogError("Cannot start GameTimer - it's NULL!");
+        }
+        
+        // Start customer spawning
+        StartCustomerSpawning();
+        UpdateScoreUI();
+        
+        Debug.Log($"Day started! Need {currentDaySettings?.requiredCustomers ?? 5} customers.");
+    }
+
+    void StartCustomerSpawning()
+    {
+        if (customerSpawningCoroutine != null)
+            StopCoroutine(customerSpawningCoroutine);
+        
+        customerSpawningCoroutine = StartCoroutine(CustomerQueueManager());
+        Debug.Log("Customer spawning started");
+    }
+
+    // Keep all the other methods from the previous GameManager...
+    // [Include all the rest of the methods here - SetupDefaultExitPoints, InitializeAfterLibrary, etc.]
+    // For brevity, I'll show the essential methods only
 
     void SetupDefaultExitPoints()
     {
-        // Create default exit points if not assigned
         if (satisfiedExitPoint == null)
         {
             GameObject satisfiedExit = new GameObject("Satisfied Customer Exit");
             satisfiedExit.transform.SetParent(transform);
             satisfiedExit.transform.position = defaultSatisfiedExit;
             satisfiedExitPoint = satisfiedExit.transform;
-            
-            if (showQueueDebug)
-                Debug.Log("Created default satisfied customer exit point");
         }
 
         if (disappointedExitPoint == null)
@@ -73,39 +241,31 @@ public class GameManager : MonoBehaviour
             disappointedExit.transform.SetParent(transform);
             disappointedExit.transform.position = defaultDisappointedExit;
             disappointedExitPoint = disappointedExit.transform;
-            
-            if (showQueueDebug)
-                Debug.Log("Created default disappointed customer exit point");
         }
     }
     
     IEnumerator InitializeAfterLibrary()
     {
-        yield return null; // Wait one frame
+        yield return null;
         
-        // Ensure book library is refreshed
         if (BookLibrary.Instance != null)
         {
             BookLibrary.Instance.RefreshBookLibrary();
-            Debug.Log("GameManager: Book library refreshed before spawning customers");
+            Debug.Log("GameManager: Book library refreshed");
         }
         
-        // Start the customer queue system
-        StartCoroutine(CustomerQueueManager());
         UpdateScoreUI();
     }
 
     IEnumerator CustomerQueueManager()
     {
-        while (true)
+        while (currentState == GameState.Playing)
         {
-            // Spawn new customers if queue isn't full
             if (GetTotalCustomerCount() < maxQueueSize)
             {
                 SpawnNewCustomer();
             }
             
-            // Wait before potentially spawning another
             yield return new WaitForSeconds(spawnInterval);
         }
     }
@@ -119,35 +279,31 @@ public class GameManager : MonoBehaviour
 
     void SpawnNewCustomer()
     {
+        if (spawner == null)
+        {
+            Debug.LogError("CustomerSpawner is NULL!");
+            return;
+        }
+
         Customer newCustomer = spawner.SpawnCustomer();
         if (newCustomer != null)
         {
             customerQueue.Add(newCustomer);
-            
-            // Position the customer at the back of the queue
             PositionCustomerInQueue(newCustomer, customerQueue.Count - 1);
             
-            // If this is the first customer and no one is being served, make them current
             if (currentCustomer == null)
             {
                 AdvanceQueue();
             }
             
-            if (showQueueDebug)
-            {
-                Debug.Log($"Added customer to queue. Queue size: {customerQueue.Count}, Total customers: {GetTotalCustomerCount()}");
-            }
+            Debug.Log($"Customer spawned. Queue size: {customerQueue.Count}");
         }
     }
 
     void PositionCustomerInQueue(Customer customer, int queuePosition)
     {
         Vector3 targetPosition = queueStartPosition + Vector3.right * (queuePosition * queueSpacing);
-        
-        // Set as waiting customer
         customer.SetAsWaitingCustomer(queuePosition);
-        
-        // Move customer to queue position
         StartCoroutine(customer.MoveToPosition(targetPosition));
     }
 
@@ -156,31 +312,63 @@ public class GameManager : MonoBehaviour
         if (customerQueue.Count == 0)
         {
             currentCustomer = null;
-            if (showQueueDebug)
-                Debug.Log("No customers in queue");
             return;
         }
 
-        // Set the first customer in queue as current
         currentCustomer = customerQueue[0];
         customerQueue.RemoveAt(0);
-
-        // Make them the current customer (this will show their order)
         currentCustomer.SetAsCurrentCustomer();
-
-        // Move current customer to service position
         StartCoroutine(currentCustomer.MoveToPosition(servicePosition));
 
-        // Advance all remaining customers in queue
         for (int i = 0; i < customerQueue.Count; i++)
         {
             PositionCustomerInQueue(customerQueue[i], i);
         }
+    }
 
-        if (showQueueDebug)
+    public void CompleteCustomerAndQueueNext()
+    {
+        if (currentCustomer != null)
         {
-            Debug.Log($"Advanced queue. Current customer wants: {currentCustomer?.order}, Queue size: {customerQueue.Count}");
+            currentCustomer = null;
         }
+
+        totalCustomersServed++;
+        AddScore(currentDaySettings?.pointsPerCustomer ?? 100);
+        
+        AdvanceQueue();
+        UpdateScoreUI();
+        
+        Debug.Log($"Customer served! Total: {totalCustomersServed}");
+    }
+
+    public void HandleFailedDelivery(Customer disappointedCustomer)
+    {
+        wrongDeliveries++;
+        AddScore(-scorePenalty);
+        
+        if (customerQueue.Contains(disappointedCustomer))
+        {
+            customerQueue.Remove(disappointedCustomer);
+            for (int i = 0; i < customerQueue.Count; i++)
+            {
+                PositionCustomerInQueue(customerQueue[i], i);
+            }
+        }
+        
+        if (currentCustomer == disappointedCustomer)
+        {
+            currentCustomer = null;
+            StartCoroutine(AdvanceQueueAfterDelay());
+        }
+        
+        UpdateScoreUI();
+    }
+
+    IEnumerator AdvanceQueueAfterDelay()
+    {
+        yield return new WaitForSeconds(respawnDelay);
+        AdvanceQueue();
     }
 
     public Vector3 GetSatisfiedExitPosition()
@@ -208,57 +396,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    public void CompleteCustomerAndQueueNext()
-    {
-        if (currentCustomer != null)
-        {
-            // Customer will handle their own success animation and removal
-            currentCustomer = null;
-        }
-
-        totalCustomersServed++;
-        AddScore(100);
-        Debug.Log($"Customer #{totalCustomersServed} served successfully! +100 points");
-        
-        // Advance to next customer in queue
-        AdvanceQueue();
-        UpdateScoreUI();
-    }
-
-    public void HandleFailedDelivery(Customer disappointedCustomer)
-    {
-        wrongDeliveries++;
-        AddScore(-scorePenalty);
-        Debug.Log($"Wrong delivery #{wrongDeliveries}! -{scorePenalty} points");
-        
-        // Remove from queue if they're in it
-        if (customerQueue.Contains(disappointedCustomer))
-        {
-            customerQueue.Remove(disappointedCustomer);
-            // Reposition remaining customers
-            for (int i = 0; i < customerQueue.Count; i++)
-            {
-                PositionCustomerInQueue(customerQueue[i], i);
-            }
-        }
-        
-        if (currentCustomer == disappointedCustomer)
-        {
-            currentCustomer = null;
-            StartCoroutine(AdvanceQueueAfterDelay());
-        }
-        
-        UpdateScoreUI();
-        // Customer will destroy themselves after animation
-    }
-
-    IEnumerator AdvanceQueueAfterDelay()
-    {
-        yield return new WaitForSeconds(respawnDelay);
-        AdvanceQueue();
-        Debug.Log("Advanced to next customer after failed delivery!");
-    }
-
     public void CleanupWrongBook(Book wrongBook)
     {
         if (wrongBook != null)
@@ -268,70 +405,14 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Visual helpers in Scene view
-    void OnDrawGizmosSelected()
-    {
-        // Draw satisfied exit point
-        Vector3 satisfiedPos = GetSatisfiedExitPosition();
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(satisfiedPos, 0.7f);
-        Gizmos.DrawLine(servicePosition, satisfiedPos);
-        
-        // Draw disappointed exit point
-        Vector3 disappointedPos = GetDisappointedExitPosition();
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(disappointedPos, 0.7f);
-        Gizmos.DrawLine(servicePosition, disappointedPos);
-        
-        // Draw service position
-        Gizmos.color = Color.blue;
-        Gizmos.DrawWireSphere(servicePosition, 0.5f);
-        
-        // Draw queue positions
-        Gizmos.color = Color.yellow;
-        for (int i = 0; i < maxQueueSize; i++)
-        {
-            Vector3 queuePos = queueStartPosition + Vector3.right * (i * queueSpacing);
-            Gizmos.DrawWireCube(queuePos, Vector3.one * 0.3f);
-        }
-    }
-
-    // Debug methods
-    [ContextMenu("Add Customer to Queue")]
-    public void DebugAddCustomer()
+    // Manual start button for testing
+    [ContextMenu("Force Start Day")]
+    public void ForceStartDay()
     {
         if (Application.isPlaying)
         {
-            SpawnNewCustomer();
+            Debug.Log("Forcing day start...");
+            StartDay();
         }
-    }
-
-    [ContextMenu("Clear All Customers")]
-    public void DebugClearAllCustomers()
-    {
-        if (Application.isPlaying)
-        {
-            foreach (var customer in customerQueue)
-            {
-                if (customer != null)
-                    Destroy(customer.gameObject);
-            }
-            customerQueue.Clear();
-            
-            if (currentCustomer != null)
-            {
-                Destroy(currentCustomer.gameObject);
-                currentCustomer = null;
-            }
-            
-            UpdateScoreUI();
-        }
-    }
-
-    [ContextMenu("Show Exit Positions")]
-    public void DebugShowExitPositions()
-    {
-        Debug.Log($"Satisfied Exit: {GetSatisfiedExitPosition()}");
-        Debug.Log($"Disappointed Exit: {GetDisappointedExitPosition()}");
     }
 }
