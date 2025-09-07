@@ -309,7 +309,8 @@ public class GameManager : MonoBehaviour
             var resultText = dayCompletePanel.GetComponentInChildren<TextMeshProUGUI>();
             if (resultText != null)
             {
-                resultText.text = $"Day {currentDaySettings?.dayNumber ?? 1} Complete!\n\n" +
+                resultText.text =
+                                 $"Day {currentDaySettings?.dayNumber ?? 1} Complete!\n\n" +
                                  $"Customers Served: {result.customersServed}/{currentDaySettings?.requiredCustomers ?? 5}\n" +
                                  $"Wrong Orders: {result.wrongOrders}\n" +
                                  $"Final Score: {result.finalScore}\n" +
@@ -334,7 +335,8 @@ public class GameManager : MonoBehaviour
             if (resultText != null)
             {
                 int required = currentDaySettings?.requiredCustomers ?? 5;
-                resultText.text = $"Day {currentDaySettings?.dayNumber ?? 1} Failed!\n\n" +
+                resultText.text = $"Awe man... Maybe Next Time\n"+
+                                 $"Day {currentDaySettings?.dayNumber ?? 1} Failed!\n\n" +
                                  $"Customers Served: {result.customersServed}/{required}\n" +
                                  $"You needed {required - result.customersServed} more customers!\n" +
                                  $"Wrong Orders: {result.wrongOrders}\n" +
