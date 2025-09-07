@@ -24,13 +24,44 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        HandleInput();
-        UpdateAnimations();
+        // Only allow movement during Playing state
+        if (CanPlayerMove())
+        {
+            HandleInput();
+            UpdateAnimations();
+        }
+        else
+        {
+            // Stop movement and animations when not allowed to move
+            movement = Vector2.zero;
+            UpdateAnimations();
+        }
     }
 
     void FixedUpdate()
     {
-        MovePlayer();
+        // Only move if allowed
+        if (CanPlayerMove())
+        {
+            MovePlayer();
+        }
+        else
+        {
+            // Ensure player stops moving
+            rb.linearVelocity = Vector2.zero;
+        }
+    }
+
+    bool CanPlayerMove()
+    {
+        // Check if GameManager exists and is in playing state
+        if (GameManager.I != null)
+        {
+            return GameManager.I.currentState == GameState.Playing;
+        }
+        
+        // If no GameManager, allow movement (fallback)
+        return true;
     }
 
     void HandleInput()
@@ -63,9 +94,6 @@ public class PlayerController : MonoBehaviour
         animator.SetFloat("Speed", speed);
         animator.SetFloat("Horizontal", movement.x);
         animator.SetFloat("Vertical", movement.y);
-        
-        // Debug output to see what values are being sent
-        Debug.Log($"Speed: {speed}, Horizontal: {movement.x}, Vertical: {movement.y}");
     }
 
     void MovePlayer()

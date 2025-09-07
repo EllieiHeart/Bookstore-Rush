@@ -31,7 +31,7 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI dayInfoText;
     public TextMeshProUGUI objectiveText;
 
-    [Header("DEBUG - Check These Are Assigned")]
+    [Header("DEBUG")]
     public bool debugMode = true;
 
     [Header("Customer Exit Positions")]
@@ -51,13 +51,22 @@ public class GameManager : MonoBehaviour
     public int scorePenalty = 25;
     public float respawnDelay = 1f;
 
-    [Header("Runtime")]
+    [Header("Runtime - DO NOT EDIT")]
     public Customer currentCustomer;
     public List<Customer> customerQueue = new List<Customer>();
     public int score;
     public int totalCustomersServed;
     public int wrongDeliveries;
-    public GameState currentState = GameState.Preparation;
+    [SerializeField] private GameState _currentState = GameState.Preparation;
+    public GameState currentState 
+    { 
+        get => _currentState; 
+        private set 
+        { 
+            _currentState = value;
+            if (debugMode) Debug.Log($"Game state changed to: {value}");
+        } 
+    }
 
     private DaySettings currentDaySettings;
     private Coroutine customerSpawningCoroutine;
@@ -80,9 +89,15 @@ public class GameManager : MonoBehaviour
         
         StartCoroutine(InitializeAfterLibrary());
         SetupDefaultExitPoints();
+        SetupEventListeners();
         
-        // Try to start the system manually if DayManager doesn't work
+        // Start the fallback system
         StartCoroutine(FallbackStartSystem());
+    }
+
+    void OnDestroy()
+    {
+        RemoveEventListeners();
     }
 
     void DebugCheckReferences()
@@ -97,13 +112,32 @@ public class GameManager : MonoBehaviour
         Debug.Log("========================");
     }
 
+    void SetupEventListeners()
+    {
+        if (gameTimer != null)
+            GameTimer.OnTimerFinished += OnDayTimerFinished;
+        
+        if (dayManager != null)
+        {
+            DayManager.OnDayStarted += OnDayStarted;
+            DayManager.OnDayCompleted += OnDayCompleted;
+        }
+    }
+
+    void RemoveEventListeners()
+    {
+        GameTimer.OnTimerFinished -= OnDayTimerFinished;
+        DayManager.OnDayStarted -= OnDayStarted;
+        DayManager.OnDayCompleted -= OnDayCompleted;
+    }
+
     IEnumerator FallbackStartSystem()
     {
-        yield return new WaitForSeconds(1f); // Wait for other components to initialize
+        yield return new WaitForSeconds(1f);
         
         if (currentState == GameState.Preparation)
         {
-            Debug.Log("FALLBACK: Starting day system manually since DayManager didn't trigger");
+            Debug.Log("FALLBACK: Starting day system manually");
             
             // Create default day settings
             currentDaySettings = new DaySettings
@@ -122,6 +156,20 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void OnDayStarted(DaySettings daySettings)
+    {
+        currentDaySettings = daySettings;
+        maxQueueSize = daySettings.maxQueueSize;
+        spawnInterval = daySettings.customerSpawnInterval;
+        scorePenalty = daySettings.wrongOrderPenalty;
+        
+        if (dayInfoText != null)
+            dayInfoText.text = daySettings.dayName;
+        
+        UpdateObjectiveUI();
+        StartPreparationPhase();
+    }
+
     void StartPreparationPhase()
     {
         if (debugMode)
@@ -129,15 +177,8 @@ public class GameManager : MonoBehaviour
         
         currentState = GameState.Preparation;
         
-        if (preparationPanel != null)
-        {
-            preparationPanel.SetActive(true);
-            Debug.Log("Preparation panel activated");
-        }
-        else
-        {
-            Debug.LogError("Preparation panel is NULL!");
-        }
+        // Show preparation panel
+        SetActivePanel(preparationPanel);
         
         if (gameTimer != null)
         {
@@ -180,14 +221,9 @@ public class GameManager : MonoBehaviour
         }
         
         currentState = GameState.Playing;
-        Debug.Log("Game state changed to: Playing");
         
-        // Hide preparation UI
-        if (preparationPanel != null)
-        {
-            preparationPanel.SetActive(false);
-            Debug.Log("Preparation panel deactivated");
-        }
+        // Hide all panels
+        SetActivePanel(null);
         
         // Reset stats
         score = 0;
@@ -205,7 +241,6 @@ public class GameManager : MonoBehaviour
             Debug.LogError("Cannot start GameTimer - it's NULL!");
         }
         
-        // Start customer spawning
         StartCustomerSpawning();
         UpdateScoreUI();
         
@@ -221,10 +256,136 @@ public class GameManager : MonoBehaviour
         Debug.Log("Customer spawning started");
     }
 
-    // Keep all the other methods from the previous GameManager...
-    // [Include all the rest of the methods here - SetupDefaultExitPoints, InitializeAfterLibrary, etc.]
-    // For brevity, I'll show the essential methods only
+    void OnDayTimerFinished()
+    {
+        if (currentState != GameState.Playing) return;
+        
+        Debug.Log("Day timer finished! Checking results...");
+        StopCustomerSpawning();
+        CheckDayCompletion();
+    }
 
+    void StopCustomerSpawning()
+    {
+        if (customerSpawningCoroutine != null)
+        {
+            StopCoroutine(customerSpawningCoroutine);
+            customerSpawningCoroutine = null;
+        }
+    }
+
+    void CheckDayCompletion()
+    {
+        bool success = totalCustomersServed >= (currentDaySettings?.requiredCustomers ?? 5);
+        float timeRemaining = gameTimer != null ? gameTimer.TimeRemaining : 0f;
+        
+        DayResult result = new DayResult(success, totalCustomersServed, wrongDeliveries, score, timeRemaining);
+        
+        if (success)
+        {
+            OnDaySuccess(result);
+        }
+        else
+        {
+            OnDayFailed(result);
+        }
+        
+        if (dayManager != null)
+            dayManager.CompleteDayWithResult(result);
+    }
+
+    void OnDaySuccess(DayResult result)
+    {
+        currentState = GameState.DayComplete;
+        
+        Debug.Log($"Day {currentDaySettings?.dayNumber ?? 1} completed successfully!");
+        
+        // Show success panel
+        SetActivePanel(dayCompletePanel);
+        
+        // Update success UI with results
+        if (dayCompletePanel != null)
+        {
+            var resultText = dayCompletePanel.GetComponentInChildren<TextMeshProUGUI>();
+            if (resultText != null)
+            {
+                resultText.text = $"Day {currentDaySettings?.dayNumber ?? 1} Complete!\n\n" +
+                                 $"Customers Served: {result.customersServed}/{currentDaySettings?.requiredCustomers ?? 5}\n" +
+                                 $"Wrong Orders: {result.wrongOrders}\n" +
+                                 $"Final Score: {result.finalScore}\n" +
+                                 $"Time Bonus: {Mathf.FloorToInt(result.timeRemaining)} seconds";
+            }
+        }
+    }
+
+    void OnDayFailed(DayResult result)
+    {
+        currentState = GameState.DayFailed;
+        
+        Debug.Log($"Day {currentDaySettings?.dayNumber ?? 1} failed!");
+        
+        // Show failure panel
+        SetActivePanel(dayFailedPanel);
+        
+        // Update failure UI with results
+        if (dayFailedPanel != null)
+        {
+            var resultText = dayFailedPanel.GetComponentInChildren<TextMeshProUGUI>();
+            if (resultText != null)
+            {
+                int required = currentDaySettings?.requiredCustomers ?? 5;
+                resultText.text = $"Day {currentDaySettings?.dayNumber ?? 1} Failed!\n\n" +
+                                 $"Customers Served: {result.customersServed}/{required}\n" +
+                                 $"You needed {required - result.customersServed} more customers!\n" +
+                                 $"Wrong Orders: {result.wrongOrders}\n" +
+                                 $"Final Score: {result.finalScore}";
+            }
+        }
+    }
+
+    void OnDayCompleted(DayResult result)
+    {
+        ClearAllCustomers();
+    }
+
+    // Helper method to manage panels
+    void SetActivePanel(GameObject panelToShow)
+    {
+        if (preparationPanel != null) preparationPanel.SetActive(panelToShow == preparationPanel);
+        if (dayCompletePanel != null) dayCompletePanel.SetActive(panelToShow == dayCompletePanel);
+        if (dayFailedPanel != null) dayFailedPanel.SetActive(panelToShow == dayFailedPanel);
+    }
+
+    // UI Button Methods
+    public void NextDay()
+    {
+        if (currentState != GameState.DayComplete) return;
+        
+        SetActivePanel(null);
+        
+        if (dayManager != null)
+            dayManager.GoToNextDay();
+        else
+            RestartDay(); // Fallback
+    }
+
+    public void RestartDay()
+    {
+        SetActivePanel(null);
+        ClearAllCustomers();
+        
+        if (dayManager != null)
+            dayManager.RestartCurrentDay();
+        else
+            StartPreparationPhase(); // Fallback
+    }
+
+    public void ReturnToMenu()
+    {
+        SceneManager.LoadScene("MainMenu");
+    }
+
+    // All the rest of your existing methods...
     void SetupDefaultExitPoints()
     {
         if (satisfiedExitPoint == null)
@@ -336,6 +497,16 @@ public class GameManager : MonoBehaviour
         totalCustomersServed++;
         AddScore(currentDaySettings?.pointsPerCustomer ?? 100);
         
+        // Check for early completion
+        if (currentDaySettings != null && totalCustomersServed >= currentDaySettings.requiredCustomers)
+        {
+            if (gameTimer != null && gameTimer.HasTimeLeft)
+            {
+                Debug.Log("Day completed early!");
+                // Could end immediately or let timer run for bonus points
+            }
+        }
+        
         AdvanceQueue();
         UpdateScoreUI();
         
@@ -394,6 +565,33 @@ public class GameManager : MonoBehaviour
             string currentOrder = currentCustomer != null ? currentCustomer.order.ToString() : "None";
             scoreText.text = $"Score: {score}\nServed: {totalCustomersServed}\nWrong: {wrongDeliveries}\nQueue: {customerQueue.Count}\nCurrent: {currentOrder}";
         }
+        
+        UpdateObjectiveUI();
+    }
+
+    void UpdateObjectiveUI()
+    {
+        if (objectiveText != null && currentDaySettings != null)
+        {
+            int remaining = Mathf.Max(0, currentDaySettings.requiredCustomers - totalCustomersServed);
+            objectiveText.text = $"Goal: {totalCustomersServed}/{currentDaySettings.requiredCustomers} customers\nRemaining: {remaining}";
+        }
+    }
+
+    void ClearAllCustomers()
+    {
+        foreach (var customer in customerQueue)
+        {
+            if (customer != null)
+                Destroy(customer.gameObject);
+        }
+        customerQueue.Clear();
+        
+        if (currentCustomer != null)
+        {
+            Destroy(currentCustomer.gameObject);
+            currentCustomer = null;
+        }
     }
 
     public void CleanupWrongBook(Book wrongBook)
@@ -405,7 +603,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Manual start button for testing
+    // Manual controls for testing
     [ContextMenu("Force Start Day")]
     public void ForceStartDay()
     {
@@ -413,6 +611,25 @@ public class GameManager : MonoBehaviour
         {
             Debug.Log("Forcing day start...");
             StartDay();
+        }
+    }
+
+    [ContextMenu("Force Day Success")]
+    public void DebugForceSuccess()
+    {
+        if (Application.isPlaying)
+        {
+            totalCustomersServed = currentDaySettings?.requiredCustomers ?? 5;
+            CheckDayCompletion();
+        }
+    }
+
+    [ContextMenu("Force Day Failure")]
+    public void DebugForceFailure()
+    {
+        if (Application.isPlaying)
+        {
+            OnDayTimerFinished();
         }
     }
 }
