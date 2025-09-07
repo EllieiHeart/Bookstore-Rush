@@ -6,11 +6,13 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 5f;
     
     private Rigidbody2D rb;
+    private Animator animator;
     private Vector2 movement;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        animator = GetComponent<Animator>();
         
         // Add the required components if they don't exist
         if (GetComponent<PlayerInventory>() == null)
@@ -23,6 +25,7 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         HandleInput();
+        UpdateAnimations();
     }
 
     void FixedUpdate()
@@ -47,6 +50,22 @@ public class PlayerController : MonoBehaviour
 
         // Normalize diagonal movement
         movement = movement.normalized;
+    }
+
+    void UpdateAnimations()
+    {
+        if (animator == null) return;
+
+        // Calculate speed
+        float speed = movement.magnitude;
+        
+        // Set animation parameters
+        animator.SetFloat("Speed", speed);
+        animator.SetFloat("Horizontal", movement.x);
+        animator.SetFloat("Vertical", movement.y);
+        
+        // Debug output to see what values are being sent
+        Debug.Log($"Speed: {speed}, Horizontal: {movement.x}, Vertical: {movement.y}");
     }
 
     void MovePlayer()

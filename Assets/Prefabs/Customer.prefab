@@ -27,14 +27,14 @@ RectTransform:
   m_GameObject: {fileID: 218024456478477616}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -2}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.21443127, y: 0.21443127, z: 0.21443127}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1358841951538315334}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0.93}
+  m_AnchoredPosition: {x: 0, y: 0.271}
   m_SizeDelta: {x: 20, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &6166502214320246872
@@ -112,7 +112,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -205,7 +205,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -4.17, y: -5.08, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 3, y: 3, z: 3}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6938504872178376565}
@@ -255,7 +255,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 6
-  m_Sprite: {fileID: -2413806693520163455, guid: a86470a33a6bf42c4b3595704624658b, type: 3}
+  m_Sprite: {fileID: 8820753214136849641, guid: 1bf8d5048501c794aa7654b1ef736403, type: 3}
   m_Color: {r: 0.96815324, g: 1, b: 0, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -282,10 +282,18 @@ MonoBehaviour:
     genre: 
     cover: 
   orderText: {fileID: 1432839608888718582}
+  isCurrentCustomer: 0
+  queuePosition: 0
   moveSpeed: 3
   disappointmentTime: 1
+  enableSuccessAnimation: 1
+  successAnimationDuration: 1
+  jumpHeight: 0.8
+  successColor: {r: 0, g: 1, b: 0, a: 1}
+  celebrationTime: 1.5
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   disappointedColor: {r: 1, g: 0, b: 0, a: 1}
+  waitingColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
 --- !u!58 &53203207046714523
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -303,7 +311,7 @@ CircleCollider2D:
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
-  m_LayerOverridePriority: 10
+  m_LayerOverridePriority: 0
   m_ForceSendLayers:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -316,9 +324,9 @@ CircleCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 1
+  m_IsTrigger: 0
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
-  m_Radius: 0.5
+  m_Radius: 0.125
